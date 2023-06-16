@@ -17,7 +17,7 @@ split_list = ['train', 'val', 'test']
 class MiniImageNet(Dataset):
     def __init__(self, split, augment=False):
         self.images, self.labels, self.classes_dict = self.parse_file(
-            os.path.join("./data/miniimagenet/split/", "{}.csv".format(split)))
+            os.path.join("../data/miniimagenet/split/", "{}.csv".format(split)))
         self.num_classes = len(self.classes_dict.keys())
         self.transforms = self.get_transforms(augment, split)
 
@@ -66,7 +66,7 @@ class MiniImageNet(Dataset):
 
     def __getitem__(self, index):
         image, label = self.images[int(index)], self.labels[int(index)]
-        img = Image.open(os.path.join("./data/miniimagenet/images/", image))
+        img = Image.open(os.path.join("../data/miniimagenet/images/", image))
         image = self.transforms(img)
         return image, label
 
@@ -97,10 +97,14 @@ class NovelDataset(Dataset):
         :return: return the image path and image label
         """
         image, label = self.novel_dataset.images[int(index)], self.novel_dataset.labels[int(index)]
-        img = os.path.join("./data/miniimagenet/images/", image)
+        img = os.path.join("../data/miniimagenet/images/", image)
         return img, label
 
 
 if __name__ == '__main__':
     dataset = NovelDataset(k_shot=5)
     print(len(dataset.support))
+    img, label = dataset[0]
+    print(label)
+    image = Image.open(img)
+    image.show()
