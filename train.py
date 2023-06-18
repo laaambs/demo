@@ -27,7 +27,7 @@ def prepare_model(init_weights, way=5, shot=5, query=15):
 
 
 def prepare_optimizer(model, lr=0.002, lr_mul=5, mom=0.9, weight_decay=0.0005,
-                      milestones=[40,70,100,130], gamma=0.5):
+                      milestones=[40, 70, 100, 130], gamma=0.5):
     top_para = [v for k, v in model.named_parameters() if 'encoder' not in k]
     optimizer = optim.SGD(
         [{'params': model.encoder.parameters()},
@@ -79,7 +79,7 @@ class Trainer:
         self.lr_mul = 10
         self.momentum = 0.9
         self.weight_decay = 0.0005
-        self.milestones = [40,70,100,130]
+        self.milestones = [40, 70, 100, 130]
         self.gamma = 0.5
         self.max_epoch = 160
         self.eval_interval = 1
@@ -169,20 +169,19 @@ class Trainer:
         total_loss = 0.0
         total_acc = 0.0
         with torch.no_grad():
-            for i, batch in enumerate(self.test_dataloader,1):
+            for i, batch in enumerate(self.test_dataloader, 1):
                 data = batch[0]
                 if torch.cuda.is_available():
                     data = data.cuda()
                 logits = self.model(data)
                 loss = self.model.compute_loss(logits, labels)
                 acc = self.model.compute_accuracy(logits, labels)
-                total_loss+=loss.item()
-                total_acc+=acc
+                total_loss += loss.item()
+                total_acc += acc
                 print('Test batch:{}, loss=:{:.4f}, acc={:.4f}'.format(batch_count, loss, acc))
                 batch_count += 1
-        print('Test total loss={:.4f}, total acc={:.4f}'.format(total_loss,total_acc)) 
-        print('Test average loss={:.4f}, average acc={:.4f}'.format(total_loss/batch_count,total_acc/batch_count))
-
+        print('Test total loss={:.4f}, total acc={:.4f}'.format(total_loss, total_acc))
+        print('Test average loss={:.4f}, average acc={:.4f}'.format(total_loss / batch_count, total_acc / batch_count))
 
 
 if __name__ == '__main__':

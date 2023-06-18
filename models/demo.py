@@ -2,6 +2,8 @@
 # @Time    : 2023/3/1 16:13
 # @Author  : lambs
 # @File    : demo.py
+import os
+
 import torch
 import torch.nn as nn
 import numpy as np
@@ -101,31 +103,53 @@ class Demo(nn.Module):
         base_idx = range(novel_class * samples_per_class, (novel_class + base_class) * samples_per_class)
         return novel_idx, base_idx
 
-    def forward(self, x, triplet=False):
+    def forward(self, x, mode="base"):
+        if mode == "base":
+            return self.base_forward(x)
+        elif mode == "triplet":
+            return self.triplet_forward(x)
+        elif mode == "kmeans":
+            return self.kmeans_forward(x)
+
+    def base_forward(self, x):
         # feature extraction
         batch_emb = self.encoder(x)
-        if not triplet:
-            # split support and query
-            support_idx, query_idx = self.split_instances()
-            support_emb = batch_emb[support_idx]
-            query_emb = batch_emb[query_idx]
-            # feature adaption
-            adapted_support = self.attention(support_emb, query_emb, query_emb)
-            adapted_query = self.attention(query_emb, support_emb, support_emb)
-            # compute prototype
-            prototype = adapted_support.contiguous().view(self.shot, self.way, -1)
-            prototype = prototype.permute(1, 0, 2).mean(dim=1)
-            # nn classify
-            logits = - self.euclidean_dist(adapted_query, prototype)
-            return logits
-        else:
-            # split novel and base
-            novel_idx, base_idx = self.split_novel_instances()
-            novel_emb = batch_emb[novel_idx]
-            base_emb = batch_emb[base_idx]
-            # get negative samples
-            negative_emb = self.attention(base_emb, novel_emb, novel_emb, triplet=True)
-            return torch.cat((novel_emb, negative_emb), dim=0)
+        # split support and query
+        support_idx, query_idx = self.split_instances()
+        support_emb = batch_emb[support_idx]
+        query_emb = batch_emb[query_idx]
+        # feature adaption
+        adapted_support = self.attention(support_emb, query_emb, query_emb)
+        adapted_query = self.attention(query_emb, support_emb, support_emb)
+        # compute prototype
+        prototype = adapted_support.contiguous().view(self.shot, self.way, -1)
+        prototype = prototype.permute(1, 0, 2).mean(dim=1)
+        # nn classify
+        logits = - self.euclidean_dist(adapted_query, prototype)
+        return logits
+
+    def kmeans_forward(self, x):
+        # feature extraction
+        batch_emb = self.encoder(x)
+        # split support and query
+        support_idx, query_idx = self.split_instances()
+        support_emb = batch_emb[support_idx]
+        query_emb = batch_emb[query_idx]
+        # initialize cluster centers
+        center = support_emb.reshape(5, 5, 640).permute(1, 0, 2).mean(dim=1)
+
+        return center
+
+    def triplet_forward(self, x):
+        # feature extraction
+        batch_emb = self.encoder(x)
+        # split novel and base
+        novel_idx, base_idx = self.split_novel_instances()
+        novel_emb = batch_emb[novel_idx]
+        base_emb = batch_emb[base_idx]
+        # get negative samples
+        negative_emb = self.attention(base_emb, novel_emb, novel_emb, triplet=True)
+        return torch.cat((novel_emb, negative_emb), dim=0)
 
     def euclidean_dist(self, x, y):
         x_len = x.shape[0]
@@ -153,13 +177,33 @@ class Demo(nn.Module):
 
 
 if __name__ == "__main__":
+    # prepare data
     train_dataloader, val_dataloader, test_dataloader = get_dataloader()
-    net = Demo(way=5, shot=5, query=15)
+
+    # prepare model
+    model = Demo(way=5, shot=5, query=15)
+    model_dict = model.state_dict()
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    pre_model_dict = torch.load(os.path.join("../checkpoint/", "Res12-pre.pth"), map_location=device)['params']
+    pre_model_dict = {k: v for k, v in pre_model_dict.items() if k in model_dict.keys()}
+    model_dict.update(pre_model_dict)
+    model.load_state_dict(model_dict)
+    model.to(device)
+
+    # print loss and accuracy
     for images, labels in test_dataloader:
         print(labels)
-        logits = net(images)
-        labels = net.generate_labels()
-        loss = net.compute_loss(logits, labels)
-        acc = net.compute_accuracy(logits, labels)
-        print(loss, acc)
+
+        # # 查看embedding中特征维度的均值分布
+        # batch_emb = model(images, mode="kmeans")
+        # distribution = batch_emb.reshape(20,5,640).permute(1,0,2).mean(dim=1)
+        # large_feature = torch.argwhere(distribution>1).tolist()
+        # print(large_feature)
+        # for row,col in large_feature:
+        #     print(distribution[row,col])
+        # logits = model(images)
+        # labels = model.generate_labels()
+        # loss = model.compute_loss(logits, labels)
+        # acc = model.compute_accuracy(logits, labels)
+        # print(loss, acc)
         break
